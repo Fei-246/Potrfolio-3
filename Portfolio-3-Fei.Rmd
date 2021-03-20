@@ -1,0 +1,181 @@
+---
+title: "Portfolio-3-Fei"
+author: "Fei Xie"
+date: "3/19/2021"
+output: html_document
+---
+# Let's play with the 2020 election polls data!!!
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load packages and data
+
+```{r load-packages, message = FALSE}
+library(tidyverse) 
+```
+
+```{r load-data, message = FALSE, eval = TRUE}
+presi_polls <- read_csv("data/president_polls.csv", na = c("",".","NA"))
+```
+
+### Explore the data
+
+```{r answers}
+#how many candidates are on the list?
+presi_polls %>%
+count(answer) %>%
+  arrange(desc(n))
+```
+There are 50 candidates appeared as the answer for the next presidency. 
+
+```{r first_five}
+presi_polls_five <- presi_polls %>%
+  filter(
+    answer == "Trump" | answer == "Biden" | answer == "Jorgensen" | answer == "Sanders" | answer == "Hawkins"
+  )
+```
+
+
+### How pollsters support the candidates?
+```{r pollsters}
+ggplot(presi_polls_five, aes(
+    x = answer,
+    fill = candidate_party
+  ))+
+  geom_histogram(stat = "count")+
+  scale_fill_manual(values = c("deepskyblue3","grey","grey", "coral2"))+
+  labs(
+    x = "Answer",
+    y = "Pollsters",
+    title = "The Top Five Candidates that Pollsters Like"
+  )
+```
+We know that most pollsters voted for Trump and Biden. But it shows that Trump won more, which is different from the election. This is because each observation represents results of pollsters, which is a small survey about voting, instead of real votes.
+
+### How popular are the candidates 1?
+
+In this data set, we also have the sample size and percentage of each pollster. This may give us more information about the preference of American people.
+
+```{r prercentage_plot}
+ggplot(presi_polls_five, aes(
+    x = answer,
+    y = pct,
+    fill = candidate_party
+  ))+
+  geom_jitter(aes (colour = candidate_party,
+                   size = sample_size/10000,
+                   alpha= 0.01))+
+  scale_color_manual(values = c("deepskyblue3","grey","grey", "coral2"))+
+  labs(
+    x = "Answer",
+    y = "Percentage",
+    title = "The Top Five Candidates that Pollsters Like"
+  )
+```
+
+Now we can see there are some extremely high pro-Biden and anti-Trump pollsters. But the info about sample size is still not clear in this plot. Next, we try to use some math to optimize the visualization of the sample size.
+
+### How popular does the candidates 2?
+
+Let's hypothesize that pollsters with sample size larger than 800 are more trustworthy.So we want the pollster with more than 800 people more visible.
+
+```{r convert_sample_size}
+presi_polls_five <- presi_polls_five %>%
+  mutate  (
+    sample_b = case_when(
+     sample_size < 800  ~ 10,
+     sample_size >= 800 ~ sample_size*10
+    ))
+```
+
+```{r samplesize_plot}
+ggplot(presi_polls_five, aes(
+    x = answer,
+    y = pct,
+    fill = candidate_party
+  ))+
+  geom_jitter(aes (colour = candidate_party,
+                   size = sample_b/1000,
+                   alpha= 0.01))+
+  scale_color_manual(values = c("deepskyblue3","grey","grey", "coral2"))+
+  labs(
+    x = "Answer",
+    y = "Percentage",
+    title = "The Top Five Candidates that Pollsters Like"
+  )
+```
+
+### Too many pollsters?
+
+Since there are too many pollsters, but I just trust those with sample size larger than 800. So, let's filter some of the pollsters.
+
+```{r filter_pollsters}
+presi_polls_fliter <- presi_polls_five %>%
+  filter(
+    sample_size >= 800
+  )
+```
+
+```{r plot_filtered_pollsters}
+ggplot(presi_polls_five, aes(
+    x = answer,
+    y = pct,
+    fill = candidate_party
+  ))+
+  geom_jitter(aes (colour = candidate_party,
+                   size = sample_size/1000,
+                   alpha= 0.01))+
+  scale_color_manual(values = c("deepskyblue3","grey","grey", "coral2"))+
+  labs(
+    x = "Answer",
+    y = "Percentage",
+    title = "The Top Five Candidates that Pollsters Like",
+    subtitle = "Only pollsters with more than 800 people are included"
+  )
+```
+Now we have 11076 observations... But it's still kind of messy... And who on earth is the most popular president candidate?
+
+### Making one large pollster
+
+Now, we try to combine the pollsters into a large one and see the overall results.
+
+```{r combine_dataset}
+presi_polls_combine <- presi_polls_five %>%
+  mutate (
+    votes = pct*sample_size
+  ) %>%
+  summarise(votes, group = answer)
+```
+
+```{r combined_number}
+ALL <- sum(presi_polls_five$sample_size, na.rm = FALSE)
+
+presi_polls_combine %>%
+  group_by(group) %>%
+  summarise(popularity = sum(votes)) 
+```
+
+I tried to calculate the total votes for each candidate, but it looks like that the numbers for Biden and Trump is too large. So I have to drop this plan...
+
+If we can have the total voting number for each of the candidates, I want to draw a plot like this.
+
+```{r combine_plot}
+presi_polls_combine %>%
+  group_by(group) %>%
+  summarise(popularity = sum(votes)) %>%
+  ggplot(aes(
+    y = popularity,
+    fill = group
+  ))+
+  geom_bar()+
+  scale_fill_manual(values = c("deepskyblue3","grey","grey","grey", "coral2"))+
+  coord_polar("y")+
+  labs(
+    x = "Preference",
+    y = "Pollsters",
+    title = "The Top Five Candidates that Pollsters Like"
+  )
+```
+
